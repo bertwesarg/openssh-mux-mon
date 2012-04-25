@@ -153,3 +153,46 @@ class SshMuxClient(object):
             return (False, 'Unexpected server reply, got %u' % (rep_msg,))
 
         return (True, None)
+
+    def forward(self, mode, type, listen_host, listen_port, connect_host, connect_port):
+        m = Buffer()
+        if mode:
+            m.put_int(MUX_C_OPEN_FWD)
+        else:
+            m.put_int(MUX_C_CLOSE_FWD)
+        rid = self.rid
+        self.rid += 1
+        m.put_int(rid)
+
+        m.put_int(type)
+        m.put_str(listen_host)
+        m.put_int(listen_port)
+        m.put_str(connect_host)
+        m.put_int(connect_port)
+
+        if self._write_packet(m) is not None:
+            return (False, 'Can\'t send close message')
+
+        m = self._read_packet()
+
+        rep_msg = m.get_int()
+
+        rep_rid = m.get_int()
+        if rep_rid != rid:
+            return (False, 'Got unexpected request id %u, expected %u' % (rep_rid, rid))
+
+        if rep_msg != MUX_S_OK and rep_msg != MUX_S_REMOTE_PORT:
+            rep_reason = m.get_str()
+            if rep_msg == MUX_S_FAILURE:
+                return (False, 'Failure in STOP message: %s' % (rep_reason,))
+            elif rep_msg == MUX_S_PERMISSION_DENIED:
+                return (False, 'Permission denied for STOP message: %s' % (rep_reason,))
+            return (False, 'Unexpected server reply, got %u' % (rep_msg,))
+
+        if type == MUX_FWD_DYNAMIC:
+            if rep_msg != MUX_S_REMOTE_PORT:
+                return (False, 'Expected remote port reply, got %u' % (rep_msg,))
+            rep_port = m.get_int()
+            return (True, rep_port)
+
+        return (True, None)
