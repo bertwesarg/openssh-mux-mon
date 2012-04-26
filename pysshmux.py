@@ -118,9 +118,43 @@ if __name__ == '__main__':
         if not res:
             print >>sys.stderr, val
             sys.exit(1)
-        if type == 'dynamic':
+        if type == 'remote' and listen_port == 0:
             print 'Allocated port for dynamic forwarding to %s:%u: %u' % (connect_host, connect_port, val)
         print 'Request succeeded.'
+
+    elif cmd == 'cancel-by-id':
+        if len(sys.argv) != 4:
+            print >>sys.stderr, 'Invalid number of arguments'
+            sys.exit(1)
+
+        id = int(sys.argv[3])
+        res, val = muxclient.cancel_by_id(id)
+        if not res:
+            print >>sys.stderr, val
+            sys.exit(1)
+        print 'Request succeeded.'
+
+    elif cmd == 'list':
+        res, val = muxclient.list()
+        if not res:
+            print >>sys.stderr, val
+            sys.exit(1)
+
+        fwd_types = {
+            SshMuxClient.MUX_FWD_LOCAL:   'local',
+            SshMuxClient.MUX_FWD_REMOTE:  'remote',
+            SshMuxClient.MUX_FWD_DYNAMIC: 'dynamic'
+        }
+
+        print 'List of forwardings;'
+        for fwd in val:
+            fid, \
+            ftype, \
+            listen_host, \
+            listen_port, \
+            connect_host, \
+            connect_port = fwd
+            print '  %u: %s forwarding %s:%u -> %s:%u' % (fid, fwd_types[ftype], listen_host, listen_port, connect_host, connect_port)
 
     else:
         print >>sys.stderr, 'Invalid mux command: %s' % (cmd,)

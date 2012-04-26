@@ -8,14 +8,14 @@ class Buffer(bytearray):
         self += struct.pack('!I', len(s)) + s
 
     def get_int(self):
-        assert len(self) >= 4, 'Buffer too small'
+        assert len(self) >= 4, 'Buffer too small for int: %u' % (len(self),)
         i = struct.unpack('!I', str(self[:4]))[0]
         del self[:4]
         return i
 
     def get_str(self):
         l = self.get_int()
-        assert len(self) >= l, 'Buffer too small'
+        assert len(self) >= l, 'Buffer too small for a string of length %u: %u' % (l, len(self),)
         s = str(self[:l])
         del self[:l]
         return s

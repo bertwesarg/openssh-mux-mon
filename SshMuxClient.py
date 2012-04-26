@@ -12,7 +12,7 @@ MUX_C_OPEN_FWD          = 0x10000006
 MUX_C_CLOSE_FWD         = 0x10000007
 MUX_C_NEW_STDIO_FWD     = 0x10000008
 MUX_C_STOP_LISTENING    = 0x10000009
-
+MUX_C_LIST_FWDS         = 0x1000000a
 MUX_S_OK                = 0x80000001
 MUX_S_PERMISSION_DENIED = 0x80000002
 MUX_S_FAILURE           = 0x80000003
@@ -108,21 +108,22 @@ class SshMuxClient(object):
         if self._write_packet(m) is not None:
             return (False, 'Can\'t send close message')
 
-        m = self._read_packet()
-
-        rep_msg = m.get_int()
-
-        rep_rid = m.get_int()
-        if rep_rid != rid:
-            return (False, 'Got unexpected request id %u, expected %u' % (rep_rid, rid))
-
-        if rep_msg != MUX_S_OK:
-            rep_reason = m.get_str()
-            if rep_msg == MUX_S_FAILURE:
-                return (False, 'Failure in EXIT message: %s' % (rep_reason,))
-            elif rep_msg == MUX_S_PERMISSION_DENIED:
-                return (False, 'Permission denied for EXIT message: %s' % (rep_reason,))
-            return (False, 'Unexpected server reply, got %u' % (rep_msg,))
+        # ignore reply
+#        m = self._read_packet()
+#
+#        rep_msg = m.get_int()
+#
+#        rep_rid = m.get_int()
+#        if rep_rid != rid:
+#            return (False, 'Got unexpected request id %u, expected %u' % (rep_rid, rid))
+#
+#        if rep_msg != MUX_S_OK:
+#            rep_reason = m.get_str()
+#            if rep_msg == MUX_S_FAILURE:
+#                return (False, 'Failure in EXIT message: %s' % (rep_reason,))
+#            elif rep_msg == MUX_S_PERMISSION_DENIED:
+#                return (False, 'Permission denied for EXIT message: %s' % (rep_reason,))
+#            return (False, 'Unexpected server reply, got %u' % (rep_msg,))
 
         return (True, None)
 
@@ -157,8 +158,10 @@ class SshMuxClient(object):
     def forward(self, mode, type, listen_host, listen_port, connect_host, connect_port):
         m = Buffer()
         if mode:
+            n = 'OPEN'
             m.put_int(MUX_C_OPEN_FWD)
         else:
+            n = 'CLOSE'
             m.put_int(MUX_C_CLOSE_FWD)
         rid = self.rid
         self.rid += 1
@@ -184,15 +187,82 @@ class SshMuxClient(object):
         if rep_msg != MUX_S_OK and rep_msg != MUX_S_REMOTE_PORT:
             rep_reason = m.get_str()
             if rep_msg == MUX_S_FAILURE:
-                return (False, 'Failure in STOP message: %s' % (rep_reason,))
+                return (False, 'Failure in %s message: %s' % (n, rep_reason,))
             elif rep_msg == MUX_S_PERMISSION_DENIED:
-                return (False, 'Permission denied for STOP message: %s' % (rep_reason,))
+                return (False, 'Permission denied for %s message: %s' % (n, rep_reason,))
             return (False, 'Unexpected server reply, got %u' % (rep_msg,))
 
-        if type == MUX_FWD_DYNAMIC:
+        if type == MUX_FWD_REMOTE and listen_port == 0:
             if rep_msg != MUX_S_REMOTE_PORT:
                 return (False, 'Expected remote port reply, got %u' % (rep_msg,))
             rep_port = m.get_int()
             return (True, rep_port)
 
         return (True, None)
+
+    def cancel_by_id(self, id):
+        m = Buffer()
+        m.put_int(MUX_C_CLOSE_FWD)
+        rid = self.rid
+        self.rid += 1
+        m.put_int(rid)
+        m.put_int(id)
+
+        if self._write_packet(m) is not None:
+            return (False, 'Can\'t send close message')
+
+        m = self._read_packet()
+
+        rep_msg = m.get_int()
+
+        rep_rid = m.get_int()
+        if rep_rid != rid:
+            return (False, 'Got unexpected request id %u, expected %u' % (rep_rid, rid))
+
+        if rep_msg != MUX_S_OK:
+            rep_reason = m.get_str()
+            if rep_msg == MUX_S_FAILURE:
+                return (False, 'Failure in CANCEL message: %s' % (rep_reason,))
+            elif rep_msg == MUX_S_PERMISSION_DENIED:
+                return (False, 'Permission denied for CANCEL message: %s' % (rep_reason,))
+            return (False, 'Unexpected server reply, got %u' % (rep_msg,))
+
+        return (True, None)
+
+    def list(self):
+        m = Buffer()
+        m.put_int(MUX_C_LIST_FWDS)
+        rid = self.rid
+        self.rid += 1
+        m.put_int(rid)
+
+        if self._write_packet(m) is not None:
+            return (False, 'Can\'t send list message')
+
+        m = self._read_packet()
+
+        rep_msg = m.get_int()
+
+        rep_rid = m.get_int()
+        if rep_rid != rid:
+            return (False, 'Got unexpected request id %u, expected %u' % (rep_rid, rid))
+
+        if rep_msg != MUX_S_OK:
+            rep_reason = m.get_str()
+            if rep_msg == MUX_S_FAILURE:
+                return (False, 'Failure in LIST message: %s' % (rep_reason,))
+            elif rep_msg == MUX_S_PERMISSION_DENIED:
+                return (False, 'Permission denied for LIST message: %s' % (rep_reason,))
+            return (False, 'Unexpected server reply, got %u' % (rep_msg,))
+
+        fwds = []
+        while len(m):
+            fid = m.get_int()
+            ftype = m.get_int()
+            listen_host = m.get_str()
+            listen_port = m.get_int()
+            connect_host = m.get_str()
+            connect_port = m.get_int()
+
+            fwds.append((fid, ftype, listen_host, listen_port, connect_host, connect_port))
+        return (True, fwds)
