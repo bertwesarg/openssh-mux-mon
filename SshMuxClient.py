@@ -13,6 +13,8 @@ MUX_C_CLOSE_FWD         = 0x10000007
 MUX_C_NEW_STDIO_FWD     = 0x10000008
 MUX_C_STOP_LISTENING    = 0x10000009
 MUX_C_LIST_FWDS         = 0x1000000a
+MUX_C_LIST_SESSIONS     = 0x1000000b
+MUX_C_INFO              = 0x1000000c
 MUX_S_OK                = 0x80000001
 MUX_S_PERMISSION_DENIED = 0x80000002
 MUX_S_FAILURE           = 0x80000003
@@ -21,6 +23,7 @@ MUX_S_ALIVE             = 0x80000005
 MUX_S_SESSION_OPENED    = 0x80000006
 MUX_S_REMOTE_PORT       = 0x80000007
 MUX_S_TTY_ALLOC_FAIL    = 0x80000008
+MUX_S_RESULT            = 0x80000009
 
 MUX_FWD_LOCAL   = 1
 MUX_FWD_REMOTE  = 2
@@ -28,7 +31,21 @@ MUX_FWD_DYNAMIC = 3
 
 SSHMUX_VER = 4
 
+_fwd_types = {
+    MUX_FWD_LOCAL:   'local',
+    MUX_FWD_REMOTE:  'remote',
+    MUX_FWD_DYNAMIC: 'dynamic'
+}
+
+_fwd_names = {
+    'local':   MUX_FWD_LOCAL,
+    'remote':  MUX_FWD_REMOTE,
+    'dynamic': MUX_FWD_DYNAMIC
+}
+
 class SshMuxClient(object):
+
+
     def __init__(self, path):
         self.rid = 0
         self.path = path
@@ -155,7 +172,7 @@ class SshMuxClient(object):
 
         return (True, None)
 
-    def forward(self, mode, type, listen_host, listen_port, connect_host, connect_port):
+    def forward(self, mode, ftype, listen_host, listen_port, connect_host, connect_port):
         m = Buffer()
         if mode:
             n = 'OPEN'
@@ -167,7 +184,10 @@ class SshMuxClient(object):
         self.rid += 1
         m.put_int(rid)
 
-        m.put_int(type)
+        if isinstance(ftype, basestring):
+            assert ftype in _fwd_names, 'Invalid forward type %s' % (ftype,)
+            ftype = _fwd_names[ftype]
+        m.put_int(ftype)
         m.put_str(listen_host)
         m.put_int(listen_port)
         m.put_str(connect_host)
@@ -192,7 +212,7 @@ class SshMuxClient(object):
                 return (False, 'Permission denied for %s message: %s' % (n, rep_reason,))
             return (False, 'Unexpected server reply, got %u' % (rep_msg,))
 
-        if type == MUX_FWD_REMOTE and listen_port == 0:
+        if ftype == MUX_FWD_REMOTE and listen_port == 0:
             if rep_msg != MUX_S_REMOTE_PORT:
                 return (False, 'Expected remote port reply, got %u' % (rep_msg,))
             rep_port = m.get_int()
@@ -229,7 +249,7 @@ class SshMuxClient(object):
 
         return (True, None)
 
-    def list(self):
+    def forwards(self):
         m = Buffer()
         m.put_int(MUX_C_LIST_FWDS)
         rid = self.rid
@@ -247,7 +267,7 @@ class SshMuxClient(object):
         if rep_rid != rid:
             return (False, 'Got unexpected request id %u, expected %u' % (rep_rid, rid))
 
-        if rep_msg != MUX_S_OK:
+        if rep_msg != MUX_S_RESULT:
             rep_reason = m.get_str()
             if rep_msg == MUX_S_FAILURE:
                 return (False, 'Failure in LIST message: %s' % (rep_reason,))
@@ -264,5 +284,76 @@ class SshMuxClient(object):
             connect_host = m.get_str()
             connect_port = m.get_int()
 
-            fwds.append((fid, ftype, listen_host, listen_port, connect_host, connect_port))
+            if ftype == MUX_FWD_REMOTE and listen_port == 0:
+                listen_port = m.get_int()
+
+            fwds.append((fid, _fwd_types[ftype], listen_host, listen_port, connect_host, connect_port))
         return (True, fwds)
+
+    def sessions(self):
+        m = Buffer()
+        m.put_int(MUX_C_LIST_SESSIONS)
+        rid = self.rid
+        self.rid += 1
+        m.put_int(rid)
+
+        if self._write_packet(m) is not None:
+            return (False, 'Can\'t send list message')
+
+        m = self._read_packet()
+
+        rep_msg = m.get_int()
+
+        rep_rid = m.get_int()
+        if rep_rid != rid:
+            return (False, 'Got unexpected request id %u, expected %u' % (rep_rid, rid))
+
+        if rep_msg != MUX_S_RESULT:
+            rep_reason = m.get_str()
+            if rep_msg == MUX_S_FAILURE:
+                return (False, 'Failure in LIST message: %s' % (rep_reason,))
+            elif rep_msg == MUX_S_PERMISSION_DENIED:
+                return (False, 'Permission denied for LIST message: %s' % (rep_reason,))
+            return (False, 'Unexpected server reply, got %u' % (rep_msg,))
+
+        sessions = []
+        while len(m):
+            sid = m.get_int();
+            stype = m.get_int();
+            rid = m.get_int();
+            cid = m.get_int();
+            tname = m.get_str();
+            rname = m.get_str();
+
+            sessions.append((sid, stype, rid, cid, tname, rname))
+
+        return (True, sessions)
+
+    def info(self, fmt):
+        m = Buffer()
+        m.put_int(MUX_C_INFO)
+        rid = self.rid
+        self.rid += 1
+        m.put_int(rid)
+        m.put_str(fmt)
+
+        if self._write_packet(m) is not None:
+            return (False, 'Can\'t send alive message')
+
+        m = self._read_packet()
+
+        rep_msg = m.get_int()
+
+        rep_rid = m.get_int()
+        if rep_rid != rid:
+            return (False, 'Got unexpected request id %u, expected %u' % (rep_rid, rid))
+
+        if rep_msg != MUX_S_RESULT:
+            rep_reason = m.get_str()
+            if rep_msg == MUX_S_FAILURE:
+                return (False, rep_reason)
+            return (False, 'Expected INFO message, got %x' % (rep_msg,))
+
+        rep_str = m.get_str()
+
+        return (True, rep_str)

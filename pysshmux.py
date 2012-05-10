@@ -1,3 +1,5 @@
+#!/bin/env python
+
 import os
 import sys
 import socket
@@ -89,7 +91,7 @@ if __name__ == '__main__':
 
         if len(fwdarg) == 3:
             if type == 'dynamic':
-                print >>sys.stderr, 'Invalid number of arguments for non dynamic forwarding'
+                print >>sys.stderr, 'Invalid number of arguments for dynamic forwarding'
                 sys.exit(1)
             listen_port = int(fwdarg[0])
             connect_host = fwdarg[1]
@@ -97,7 +99,7 @@ if __name__ == '__main__':
 
         if len(fwdarg) == 4:
             if type != 'dynamic':
-                print >>sys.stderr, 'Invalid number of arguments for non dynamic forwarding'
+                print >>sys.stderr, 'Invalid number of arguments for dynamic forwarding'
                 sys.exit(1)
             listen_host = fwdarg[0]
             listen_port = int(fwdarg[1])
@@ -134,19 +136,13 @@ if __name__ == '__main__':
             sys.exit(1)
         print 'Request succeeded.'
 
-    elif cmd == 'list':
-        res, val = muxclient.list()
+    elif cmd == 'forwards':
+        res, val = muxclient.forwards()
         if not res:
             print >>sys.stderr, val
             sys.exit(1)
 
-        fwd_types = {
-            SshMuxClient.MUX_FWD_LOCAL:   'local',
-            SshMuxClient.MUX_FWD_REMOTE:  'remote',
-            SshMuxClient.MUX_FWD_DYNAMIC: 'dynamic'
-        }
-
-        print 'List of forwardings;'
+        print 'List of forwardings:'
         for fwd in val:
             fid, \
             ftype, \
@@ -154,7 +150,40 @@ if __name__ == '__main__':
             listen_port, \
             connect_host, \
             connect_port = fwd
-            print '  %u: %s forwarding %s:%u -> %s:%u' % (fid, fwd_types[ftype], listen_host, listen_port, connect_host, connect_port)
+            print '  %u: %s forwarding %s:%u -> %s:%u' % (fid, ftype, listen_host, listen_port, connect_host, connect_port)
+
+    elif cmd == 'sessions':
+        res, val = muxclient.sessions()
+        if not res:
+            print >>sys.stderr, val
+            sys.exit(1)
+
+        print 'List of sessions:'
+        for session in val:
+            sid, \
+            stype, \
+            rid, \
+            cid, \
+            name, \
+            rname = session
+            print '  #%u %u %u %u %s: %s' % (sid,
+                stype,
+                rid,
+                cid,
+                name,
+                rname)
+
+    elif cmd == 'info':
+        if len(sys.argv) != 4:
+            print >>sys.stderr, 'Invalid number of arguments'
+            sys.exit(1)
+
+        res, val = muxclient.info(sys.argv[3])
+        if not res:
+            print >>sys.stderr, 'Invalid format: %s' % val
+            sys.exit(1)
+        print 'MUX info replay:'
+        print val
 
     else:
         print >>sys.stderr, 'Invalid mux command: %s' % (cmd,)
