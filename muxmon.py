@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python
 
 import os
 import os.path
@@ -34,6 +34,13 @@ class SshMuxIndicator(
 
     def __init__(self, root):
 
+        self.icon_path = os.path.normpath(os.path.join(
+            os.getcwd(),
+            os.path.dirname(__file__),
+            'icons'))
+        self.icon_name = 'file://' + os.path.join(
+            self.icon_path, 'openssh-256.png')
+
         pynotify.init('SSH-MUX-Monitor')
 
         wm = pyinotify.WatchManager()
@@ -43,10 +50,10 @@ class SshMuxIndicator(
 
         appindicator.Indicator.__init__(self,
             'ssh-mux-monitor',
-            '',
-            appindicator.CATEGORY_APPLICATION_STATUS)
+            'openssh',
+            appindicator.CATEGORY_COMMUNICATIONS,
+            self.icon_path)
         self.set_status(appindicator.STATUS_ACTIVE)
-        self.set_label("MUX")
 
         # create a menu
         menu = gtk.Menu()
@@ -257,7 +264,10 @@ class SshMuxIndicator(
         self.get_menu().remove(mc.item)
         if len(self.known) == 0:
             self.close_all_item.set_sensitive(False)
-        pynotify.Notification(mc.name, 'mux closed').show()
+        n = pynotify.Notification(mc.name, 'MUX Closed', self.icon_name)
+        n.set_urgency(pynotify.URGENCY_CRITICAL)
+        n.set_timeout(2)
+        n.show()
 
     def process_inotify_event(self, event):
         #print >>sys.stderr, ' event %s' % (arg,)
@@ -280,7 +290,10 @@ class SshMuxIndicator(
             #print >>sys.stderr, ' new %r' % (name,)
             mc.name = name
             self.known[path] = mc
-            pynotify.Notification(name, 'mux established').show()
+            n = pynotify.Notification(name, 'MUX Established', self.icon_name)
+            n.set_urgency(pynotify.URGENCY_LOW)
+            n.set_timeout(1)
+            n.show()
             self.add_to_menu(mc)
 
         return False
