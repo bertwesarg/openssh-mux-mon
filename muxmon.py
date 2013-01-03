@@ -9,11 +9,15 @@ import pygtk
 pygtk.require('2.0')
 import gtk
 import gobject
+import gconf
 import pynotify
 import pyinotify
 import appindicator
 
 import SshMuxClient
+
+GCONF_APP = '/apps/sshmuxmon'
+GCONF_APP_PATH = os.path.join(GCONF_APP, 'path')
 
 class SshMuxEntry(SshMuxClient.SshMuxClient):
     name = ''
@@ -31,8 +35,9 @@ class SshMuxIndicator(
 
     known = {}
     new = {}
+    root = None
 
-    def __init__(self, root):
+    def __init__(self):
 
         self.icon_path = os.path.normpath(os.path.join(
             os.getcwd(),
@@ -41,12 +46,16 @@ class SshMuxIndicator(
         self.icon_name = 'file://' + os.path.join(
             self.icon_path, 'openssh-256.png')
 
+        self._gcc = gconf.client_get_default()
+        self._gcc.add_dir(GCONF_APP, gconf.CLIENT_PRELOAD_NONE)
+        self._gc_nid = self._gcc.notify_add(GCONF_APP_PATH, self.gconf_notify, None)
+
         pynotify.init('SSH-MUX-Monitor')
 
-        wm = pyinotify.WatchManager()
-        pyinotify.Notifier.__init__(self, wm, self.process_inotify_event)
-        wm.add_watch(root, pyinotify.IN_CREATE | pyinotify.IN_DELETE)
-        self._w = gobject.io_add_watch(self._fd, gobject.IO_IN, self.process_io_watch)
+        self._wm = pyinotify.WatchManager()
+        pyinotify.Notifier.__init__(self, self._wm, self.process_inotify_event)
+        self._wd = None
+        self._w = gobject.io_add_watch(self._wm.get_fd(), gobject.IO_IN, self.process_io_watch)
 
         appindicator.Indicator.__init__(self,
             'ssh-mux-monitor',
@@ -83,9 +92,45 @@ class SshMuxIndicator(
         item.show()
 
         self.set_menu(menu)
-        
-        for path in os.listdir(root):
-            full = os.path.join(root, path)
+
+        self.reread_path()
+
+    def __del__(self):
+        gobject.source_remove(self._w)
+        if self._gc_nid:
+            self._gcc.notify_remove(self._gc_nid)
+
+    def reread_path(self):
+        try:
+            s = self._gcc.get_string(GCONF_APP_PATH)
+            if self.root and s and os.path.samefile(self.root, s):
+               return
+        except:
+            s = None
+
+        # there are not the same, clenup previous root, if any
+        if self.root:
+            # clear previous known mux
+            for mc in self.known.itervalues():
+                mc.close()
+                self.get_menu().remove(mc.item)
+            self.close_all_item.set_sensitive(False)
+            if self.root in self._wd:
+                self._wm.del_watch(self._wd[self.root])
+        self.known = {}
+        self.root = None
+        self._wd = None
+
+        if not s:
+            return
+        if not os.path.isdir(s):
+            return
+
+        self.root = s
+        self._wd = self._wm.add_watch(self.root, pyinotify.IN_CREATE | pyinotify.IN_DELETE)
+
+        for path in os.listdir(self.root):
+            full = os.path.join(self.root, path)
             try:
                 sb = os.stat(full)
             except:
@@ -103,9 +148,6 @@ class SshMuxIndicator(
                 self.known[full] = mc
                 #print >>sys.stderr, 'Already existing mux: %s' % (name,)
             self.add_to_menu(mc)
-
-    def __del__(self):
-        gobject.source_remove(self._w)
 
     def add_to_menu(self, mc):
         self.close_all_item.set_sensitive(True)
@@ -155,7 +197,7 @@ class SshMuxIndicator(
         gtk.main_quit()
 
     def preferences_activate(self, w):
-        pass
+        SshMuxPrefsDialog(self._gcc)
 
     def close_all_activate(self, w):
         for mc in self.known.itervalues():
@@ -298,9 +340,86 @@ class SshMuxIndicator(
 
         return False
 
-SshMuxIndicator(sys.argv[1])
+    def gconf_notify(self, client, cnxn_id, entry, arg):
+        self.reread_path()
 
-try:
-    gtk.main()
-except:
-    pass
+class SshMuxPrefsDialog(object):
+    def __init__(self, gcc):
+        self._gcc = gcc
+        self.standalone = False
+        if not self._gcc:
+            self._gcc = gconf.client_get_default()
+            self._gcc.add_dir(GCONF_APP, gconf.CLIENT_PRELOAD_NONE)
+            self.standalone = True
+
+        self.dialog = gtk.Dialog('SSH MUX Monitor Preferences',
+                None, 0, (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL, gtk.STOCK_APPLY, gtk.RESPONSE_APPLY))
+        # response when closing the dialog via the window manager
+        self.dialog.set_default_response(gtk.RESPONSE_CANCEL)
+
+        hbox = gtk.HBox(False, 3)
+
+        self.dialog.vbox.pack_start(hbox, False, False, 0)
+
+        label = gtk.Label('Directory to monitor: ')
+
+        entry = gtk.Entry()
+        entry.set_sensitive(False)
+        try:
+            s = self._gcc.get_string(GCONF_APP_PATH)
+            if s and os.path.isdir(s):
+                entry.set_text(s)
+        except:
+            pass
+
+        button = gtk.Button()
+        button.set_tooltip_text('Browse...')
+        button.set_image(gtk.image_new_from_stock(
+                gtk.STOCK_OPEN, gtk.ICON_SIZE_BUTTON))
+        button.connect('clicked', self.select_mux_path, entry)
+
+        hbox.pack_start(label, False, False, 0)
+        hbox.pack_start(entry, True, True, 0)
+        hbox.pack_end(button, False, False, 0)
+
+        self.dialog.connect('response', self.response_cb, entry)
+
+        self.dialog.show_all()
+
+    def select_mux_path(self, widget, entry):
+        chooser = gtk.FileChooserDialog(title = 'Choose directory...',
+                buttons = (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL, gtk.STOCK_OPEN, gtk.RESPONSE_OK))
+        chooser.set_action(gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER)
+
+        path = entry.get_text()
+        if path and os.path.isdir(path):
+            chooser.set_filename(path)
+        else:
+            chooser.set_filename(os.path.expanduser('~'))
+
+        ret = chooser.run()
+        filename = chooser.get_filename()
+        chooser.destroy()
+        if ret == gtk.RESPONSE_OK:
+            if filename and os.path.isdir(filename):
+                entry.set_text(filename)
+
+    def response_cb(self, widget, event, entry):
+        if event == gtk.RESPONSE_APPLY:
+            path = entry.get_text()
+            if path and os.path.isdir(path):
+                self._gcc.set_string(GCONF_APP_PATH, path)
+        widget.destroy()
+        if self.standalone:
+            gtk.main_quit()
+
+if __name__ == '__main__':
+    if len(sys.argv) == 2 and sys.argv[1] == '--prefs':
+        d = SshMuxPrefsDialog(None)
+    else:
+        i = SshMuxIndicator()
+
+    try:
+        gtk.main()
+    except:
+        pass
