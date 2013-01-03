@@ -69,13 +69,13 @@ class SshMuxClient(object):
         m.put_int(MUX_MSG_HELLO)
         m.put_int(SSHMUX_VER)
         if self._write_packet(m) is not None:
-            return (False, 'Can\'t send hello message')
+            return (False, 'Can\'t send HELLO message')
 
         m = self._read_packet()
 
         mux_msg = m.get_int()
         if mux_msg != MUX_MSG_HELLO:
-            return (False, 'Expected HELLO message, got %u' % (mux_msg,))
+            return (False, 'Expected HELLO reply, got %u' % (mux_msg,))
 
         mux_ver = m.get_int()
         if mux_ver != SSHMUX_VER:
@@ -99,13 +99,13 @@ class SshMuxClient(object):
         m.put_int(rid)
 
         if self._write_packet(m) is not None:
-            return (False, 'Can\'t send alive message')
+            return (False, 'Can\'t send ALIVE-CHECK request')
 
         m = self._read_packet()
 
         rep_msg = m.get_int()
         if rep_msg != MUX_S_ALIVE:
-            return (False, 'Expected ALIVE message, got %u' % (rep_msg,))
+            return (False, 'Expected ALIVE reply, got %u' % (rep_msg,))
 
         rep_rid = m.get_int()
         if rep_rid != rid:
@@ -123,7 +123,7 @@ class SshMuxClient(object):
         m.put_int(rid)
 
         if self._write_packet(m) is not None:
-            return (False, 'Can\'t send close message')
+            return (False, 'Can\'t send TERMINATE request')
 
         # ignore reply
 #        m = self._read_packet()
@@ -152,7 +152,7 @@ class SshMuxClient(object):
         m.put_int(rid)
 
         if self._write_packet(m) is not None:
-            return (False, 'Can\'t send close message')
+            return (False, 'Can\'t send STOP-LISTENING request')
 
         m = self._read_packet()
 
@@ -194,7 +194,7 @@ class SshMuxClient(object):
         m.put_int(connect_port)
 
         if self._write_packet(m) is not None:
-            return (False, 'Can\'t send close message')
+            return (False, 'Can\'t send %s-FORWARD request' % (n,))
 
         m = self._read_packet()
 
@@ -207,9 +207,9 @@ class SshMuxClient(object):
         if rep_msg != MUX_S_OK and rep_msg != MUX_S_REMOTE_PORT:
             rep_reason = m.get_str()
             if rep_msg == MUX_S_FAILURE:
-                return (False, 'Failure in %s message: %s' % (n, rep_reason,))
+                return (False, 'Failure in %s-FORWARD request: %s' % (n, rep_reason,))
             elif rep_msg == MUX_S_PERMISSION_DENIED:
-                return (False, 'Permission denied for %s message: %s' % (n, rep_reason,))
+                return (False, 'Permission denied for %s-FORWARD request: %s' % (n, rep_reason,))
             return (False, 'Unexpected server reply, got %u' % (rep_msg,))
 
         if ftype == MUX_FWD_REMOTE and listen_port == 0:
@@ -229,7 +229,7 @@ class SshMuxClient(object):
         m.put_int(id)
 
         if self._write_packet(m) is not None:
-            return (False, 'Can\'t send close message')
+            return (False, 'Can\'t send CLOSE-FORWARD request')
 
         m = self._read_packet()
 
@@ -242,9 +242,9 @@ class SshMuxClient(object):
         if rep_msg != MUX_S_OK:
             rep_reason = m.get_str()
             if rep_msg == MUX_S_FAILURE:
-                return (False, 'Failure in CANCEL message: %s' % (rep_reason,))
+                return (False, 'Failure in CLOSE-FORWARD request: %s' % (rep_reason,))
             elif rep_msg == MUX_S_PERMISSION_DENIED:
-                return (False, 'Permission denied for CANCEL message: %s' % (rep_reason,))
+                return (False, 'Permission denied for CANCEL request: %s' % (rep_reason,))
             return (False, 'Unexpected server reply, got %u' % (rep_msg,))
 
         return (True, None)
@@ -257,7 +257,7 @@ class SshMuxClient(object):
         m.put_int(rid)
 
         if self._write_packet(m) is not None:
-            return (False, 'Can\'t send list message')
+            return (False, 'Can\'t send LIST-FORWARDS request')
 
         m = self._read_packet()
 
@@ -270,9 +270,9 @@ class SshMuxClient(object):
         if rep_msg != MUX_S_RESULT:
             rep_reason = m.get_str()
             if rep_msg == MUX_S_FAILURE:
-                return (False, 'Failure in LIST message: %s' % (rep_reason,))
+                return (False, 'Failure in LIST-FORWARDS request: %s' % (rep_reason,))
             elif rep_msg == MUX_S_PERMISSION_DENIED:
-                return (False, 'Permission denied for LIST message: %s' % (rep_reason,))
+                return (False, 'Permission denied for LIST-FORWARDS request: %s' % (rep_reason,))
             return (False, 'Unexpected server reply, got %u' % (rep_msg,))
 
         fwds = []
@@ -298,7 +298,7 @@ class SshMuxClient(object):
         m.put_int(rid)
 
         if self._write_packet(m) is not None:
-            return (False, 'Can\'t send list message')
+            return (False, 'Can\'t send LIST-SESSIONS request')
 
         m = self._read_packet()
 
@@ -311,9 +311,9 @@ class SshMuxClient(object):
         if rep_msg != MUX_S_RESULT:
             rep_reason = m.get_str()
             if rep_msg == MUX_S_FAILURE:
-                return (False, 'Failure in LIST message: %s' % (rep_reason,))
+                return (False, 'Failure in LIST-SESSIONS request: %s' % (rep_reason,))
             elif rep_msg == MUX_S_PERMISSION_DENIED:
-                return (False, 'Permission denied for LIST message: %s' % (rep_reason,))
+                return (False, 'Permission denied for LIST-SESSIONS request: %s' % (rep_reason,))
             return (False, 'Unexpected server reply, got %u' % (rep_msg,))
 
         sessions = []
@@ -338,7 +338,7 @@ class SshMuxClient(object):
         m.put_str(fmt)
 
         if self._write_packet(m) is not None:
-            return (False, 'Can\'t send alive message')
+            return (False, 'Can\'t send INFO request')
 
         m = self._read_packet()
 
@@ -352,7 +352,7 @@ class SshMuxClient(object):
             rep_reason = m.get_str()
             if rep_msg == MUX_S_FAILURE:
                 return (False, rep_reason)
-            return (False, 'Expected INFO message, got %x' % (rep_msg,))
+            return (False, 'Expected INFO reply, got %x' % (rep_msg,))
 
         rep_str = m.get_str()
 
