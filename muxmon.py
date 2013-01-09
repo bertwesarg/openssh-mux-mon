@@ -357,56 +357,36 @@ class SshMuxPrefsDialog(object):
         # response when closing the dialog via the window manager
         self.dialog.set_default_response(gtk.RESPONSE_CANCEL)
 
-        hbox = gtk.HBox(False, 3)
+        hbox = gtk.HBox(False, 2)
 
         self.dialog.vbox.pack_start(hbox, False, False, 0)
 
         label = gtk.Label('Directory to monitor: ')
 
-        entry = gtk.Entry()
-        entry.set_sensitive(False)
+        filechooser = gtk.FileChooserButton('Choose directory...', None)
+        filechooser.set_action(gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER)
         try:
             s = self._gcc.get_string(GCONF_APP_PATH)
             if s and os.path.isdir(s):
-                entry.set_text(s)
+                filechooser.set_filename(s)
         except:
-            pass
-
-        button = gtk.Button()
-        button.set_tooltip_text('Browse...')
-        button.set_image(gtk.image_new_from_stock(
-                gtk.STOCK_OPEN, gtk.ICON_SIZE_BUTTON))
-        button.connect('clicked', self.select_mux_path, entry)
+            filechooser.set_filename(os.path.expanduser('~'))
 
         hbox.pack_start(label, False, False, 0)
-        hbox.pack_start(entry, True, True, 0)
-        hbox.pack_end(button, False, False, 0)
+        hbox.pack_end(filechooser, True, True, 0)
 
-        self.dialog.connect('response', self.response_cb, entry)
+        self.dialog.connect('response', self.response_cb, filechooser)
 
         self.dialog.show_all()
 
-    def select_mux_path(self, widget, entry):
-        chooser = gtk.FileChooserDialog(title = 'Choose directory...',
-                buttons = (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL, gtk.STOCK_OPEN, gtk.RESPONSE_OK))
-        chooser.set_action(gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER)
-
-        path = entry.get_text()
-        if path and os.path.isdir(path):
-            chooser.set_filename(path)
-        else:
-            chooser.set_filename(os.path.expanduser('~'))
-
-        ret = chooser.run()
-        filename = chooser.get_filename()
-        chooser.destroy()
-        if ret == gtk.RESPONSE_OK:
-            if filename and os.path.isdir(filename):
+    def select_mux_path(self, filechooser):
+        path = filechooser.get_filename()
+        if filename and os.path.isdir(filename):
                 entry.set_text(filename)
 
-    def response_cb(self, widget, event, entry):
+    def response_cb(self, widget, event, filechooser):
         if event == gtk.RESPONSE_APPLY:
-            path = entry.get_text()
+            path = filechooser.get_filename()
             if path and os.path.isdir(path):
                 self._gcc.set_string(GCONF_APP_PATH, path)
         widget.destroy()
