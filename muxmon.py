@@ -160,9 +160,15 @@ class SshMuxIndicator(
 
         mc.sub = gtk.Menu()
 
-        item = gtk.MenuItem('Forwards:')
+        item = gtk.MenuItem('Forwards (click to close):')
         mc.sub.append(item)
         item.set_sensitive(False)
+        item.show()
+
+        item = gtk.MenuItem('New...')
+        mc.sub.append(item)
+        #item.set_sensitive(False)
+        item.connect('activate', self.mux_new_forward, mc)
         item.show()
 
         item = gtk.SeparatorMenuItem()
@@ -208,7 +214,7 @@ class SshMuxIndicator(
         for i in range(mc.n_fwds):
             mc.sub.remove(mc.sub.get_children()[1])
         for i in range(mc.n_sessions):
-            mc.sub.remove(mc.sub.get_children()[3])
+            mc.sub.remove(mc.sub.get_children()[4])
 
         mc.n_fwds = 0
         mc.n_sessions = 0
@@ -223,14 +229,15 @@ class SshMuxIndicator(
         for fwd in fwds:
             fid, ftype, lh, lp, ch, cp = fwd
             label = ''
-            if lh == '':
-                lh = 'LOCALHOST'
+            lh = lh + ':'
+            if lh == ':':
+                lh = ''
             if ftype == 'local':
-                label = '%s:%u -> %s:%u' % (lh, lp, ch, cp,)
+                label = '%s%u -> %s:%u' % (lh, lp, ch, cp,)
             if ftype == 'remote':
-                label = '%s:%u <- %s:%u' % (ch, cp, lh, lp,)
+                label = '%s:%u <- %s%u' % (ch, cp, lh, lp,)
             if ftype == 'dynamic':
-                label = '%s:%u -> *:*' % (lh, lp,)
+                label = '%s%u -> *:*' % (lh, lp,)
             item = gtk.MenuItem(label)
             mc.sub.insert(item, 1 + mc.n_fwds)
             mc.n_fwds += 1
@@ -240,7 +247,7 @@ class SshMuxIndicator(
         for s in sessions:
             sid, stype, rid, cid, name, rname = s
             item = gtk.MenuItem('%s' % (rname,))
-            mc.sub.insert(item, 3 + mc.n_fwds + mc.n_sessions)
+            mc.sub.insert(item, 4 + mc.n_fwds + mc.n_sessions)
             mc.n_sessions += 1
             item.show()
 
@@ -249,6 +256,9 @@ class SshMuxIndicator(
     def mux_close_forward(self, w, mc, fwd):
         #print 'closing forward [%s] %s:%u -> %s:%u' % (fwd[1], fwd[2], fwd[3], fwd[4], fwd[5],)
         mc.forward(False, fwd[1], fwd[2], fwd[3], fwd[4], fwd[5])
+
+    def mux_new_forward(self, w, mc):
+        SshMuxForwardingDialog(mc)
 
     def mux_stop_activate(self, w, mc):
         #print 'stoping %s' % (mc.path,)
@@ -392,6 +402,163 @@ class SshMuxPrefsDialog(object):
         widget.destroy()
         if self.standalone:
             gtk.main_quit()
+
+class SshMuxForwardingDialog(object):
+
+    _to_fwd_type = [
+        SshMuxClient.MUX_FWD_LOCAL,
+        SshMuxClient.MUX_FWD_REMOTE,
+        SshMuxClient.MUX_FWD_DYNAMIC
+    ]
+
+    def __init__(self, mc):
+        self.mc = mc
+
+        self.dialog = gtk.Dialog('New forwarding for %s' % (self.mc.name,),
+                None, 0, (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL, gtk.STOCK_APPLY, gtk.RESPONSE_APPLY))
+        # response when closing the dialog via the window manager
+        self.dialog.set_default_response(gtk.RESPONSE_CANCEL)
+
+        tab = gtk.Table(5, 2, False)
+
+        self.dialog.vbox.pack_start(tab, True, True, 0)
+
+        self.fwd_select = gtk.combo_box_new_text()
+        self.fwd_select.append_text('Local forwarding')
+        self.fwd_select.append_text('Remote forwarding')
+        self.fwd_select.append_text('Dynamic forwarding')
+        self.fwd_select.connect('changed', self.type_changed_cb)
+        tab.attach(self.fwd_select, 0, 2, 0, 1, gtk.EXPAND|gtk.FILL, 0)
+
+        # bind_address
+        self.ba_label = gtk.Label('Bind address:')
+        right_alignment = gtk.Alignment(0.0, 0.5, 0.0, 0.0)
+        right_alignment.add(self.ba_label)
+        tab.attach(right_alignment, 0, 1, 1, 2, gtk.FILL, gtk.FILL)
+        # listen_port
+        self.lp_label = gtk.Label('Listen port:')
+        right_alignment = gtk.Alignment(0.0, 0.5, 0.0, 0.0)
+        right_alignment.add(self.lp_label)
+        tab.attach(right_alignment, 0, 1, 2, 3, gtk.FILL, gtk.FILL)
+        # connect_host
+        self.ch_label = gtk.Label('Target host:')
+        right_alignment = gtk.Alignment(0.0, 0.5, 0.0, 0.0)
+        right_alignment.add(self.ch_label)
+        tab.attach(right_alignment, 0, 1, 3, 4, gtk.FILL, gtk.FILL)
+        # connect_port
+        self.cp_label = gtk.Label('Target port:')
+        right_alignment = gtk.Alignment(0.0, 0.5, 0.0, 0.0)
+        right_alignment.add(self.cp_label)
+        tab.attach(right_alignment, 0, 1, 4, 5, gtk.FILL, gtk.FILL)
+
+        hbox2 = gtk.HBox(False, 2)
+        self.ba_entry = gtk.Entry()
+        hbox2.pack_start(self.ba_entry, True, True, 0)
+        self.ba_all_check = gtk.CheckButton('All')
+        self.ba_all_check.connect('toggled', self.toggled_cb, self.ba_entry)
+        hbox2.pack_end(self.ba_all_check, False, False, 0)
+        tab.attach(hbox2, 1, 2, 1, 2, gtk.EXPAND|gtk.FILL, 0)
+
+        hbox2 = gtk.HBox(False, 2)
+        port_adj = gtk.Adjustment(1.0, 1.0, 65535, 1.0, 10.0, 0.0)
+        self.lp_entry = gtk.SpinButton(port_adj, 0, 0)
+        hbox2.pack_start(self.lp_entry, True, True, 0)
+        self.lp_auto_check = gtk.CheckButton('Auto')
+        self.lp_auto_check.connect('toggled', self.toggled_cb, self.lp_entry)
+        hbox2.pack_end(self.lp_auto_check, False, False, 0)
+        tab.attach(hbox2, 1, 2, 2, 3, gtk.EXPAND|gtk.FILL, 0)
+
+        self.ch_entry = gtk.Entry()
+        tab.attach(self.ch_entry, 1, 2, 3, 4, gtk.EXPAND|gtk.FILL, 0)
+
+        port_adj = gtk.Adjustment(1.0, 1.0, 65535, 1.0, 32.0, 0.0)
+        self.cp_entry = gtk.SpinButton(port_adj, 0, 0)
+        tab.attach(self.cp_entry, 1, 2, 4, 5, gtk.EXPAND|gtk.FILL, 0)
+
+        self.dialog.connect('response', self.response_cb)
+
+        self.fwd_select.set_active(0)
+        self.ba_all_check.set_active(True)
+
+        self.dialog.show_all()
+
+    def type_changed_cb(self, w):
+        fwd_type = self._to_fwd_type[w.get_active()]
+        self.lp_entry.set_sensitive(True)
+        self.lp_auto_check.set_active(False)
+        self.lp_auto_check.set_sensitive(False)
+        self.ch_label.set_sensitive(True)
+        self.ch_entry.set_sensitive(True)
+        self.cp_label.set_sensitive(True)
+        self.cp_entry.set_sensitive(True)
+
+        if fwd_type == SshMuxClient.MUX_FWD_REMOTE:
+            self.lp_auto_check.set_sensitive(True)
+        elif fwd_type == SshMuxClient.MUX_FWD_DYNAMIC:
+            self.ch_label.set_sensitive(False)
+            self.ch_entry.set_sensitive(False)
+            self.cp_label.set_sensitive(False)
+            self.cp_entry.set_sensitive(False)
+
+    def toggled_cb(self, source, target):
+        target.set_sensitive(not source.get_active())
+
+    def apply_forwarding(self):
+        fwd_type = self._to_fwd_type[self.fwd_select.get_active()]
+        ba = ''
+        if not self.ba_all_check.get_active():
+            ba = self.ba_entry.get_text()
+        lp = self.lp_entry.get_value_as_int()
+        if fwd_type == SshMuxClient.MUX_FWD_REMOTE and self.lp_auto_check.get_active():
+            lp = 0
+        ch = ''
+        cp = 0
+        if fwd_type != SshMuxClient.MUX_FWD_DYNAMIC:
+            ch = self.ch_entry.get_text()
+            cp = self.cp_entry.get_value_as_int()
+
+        if fwd_type == SshMuxClient.MUX_FWD_LOCAL:
+            fwd_descr = '-L %s:%u:%s:%u' % (ba, lp, ch, cp,)
+        elif fwd_type == SshMuxClient.MUX_FWD_REMOTE:
+            fwd_descr = '-R %s:%u:%s:%u' % (ba, lp, ch, cp,)
+        else:
+            fwd_descr = '-D %s:%u' % (ba, lp,)
+
+        res, remote_port = self.mc.forward(True, fwd_type, ba, lp, ch, cp)
+        if res and fwd_type == SshMuxClient.MUX_FWD_REMOTE and lp == 0:
+            message = gtk.MessageDialog(
+                    parent=None,
+                    flags=0,
+                    type=gtk.MESSAGE_INFO,
+                    buttons=gtk.BUTTONS_OK,
+                    message_format=None)
+            message.set_markup('Allocated port on the remote side: %d' % (remote_port,))
+            message.run()
+
+        return res, fwd_descr
+
+    def response_cb(self, widget, event):
+        if event == gtk.RESPONSE_APPLY:
+            res, pid = self.mc.check()
+            reason = ''
+            if res:
+                res, fwd_desc = self.apply_forwarding()
+                fwd_desc = ' ' + fwd_desc
+            else:
+                reason = 'Connection already closed.'
+            if not res:
+                message = gtk.MessageDialog(
+                        parent=None,
+                        flags=0,
+                        type=gtk.MESSAGE_ERROR,
+                        buttons=gtk.BUTTONS_OK,
+                        message_format=None)
+                message.set_markup('Couldn\'t opening forwarding%s for %s' % (fwd_desc, self.mc.name,))
+                if reason:
+                    message.format_secondary_text(reason)
+                message.run()
+
+        self.dialog.destroy()
 
 if __name__ == '__main__':
     if len(sys.argv) == 2 and sys.argv[1] == '--prefs':
