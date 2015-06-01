@@ -220,6 +220,12 @@ class SshMuxClient(object):
 
         return (True, None)
 
+    def open_forward(self, ftype, listen_host, listen_port, connect_host, connect_port):
+        return self.forward(True, ftype, listen_host, listen_port, connect_host, connect_port)
+
+    def close_forward(self, ftype, listen_host, listen_port, connect_host, connect_port):
+        return self.forward(False, ftype, listen_host, listen_port, connect_host, connect_port)
+
     def forwards(self):
         m = Buffer()
         m.put_int(MUX_C_LIST_FWDS)

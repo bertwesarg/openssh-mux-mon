@@ -255,7 +255,7 @@ class SshMuxIndicator(
 
     def mux_close_forward(self, w, mc, fwd):
         #print 'closing forward [%s] %s:%u -> %s:%u' % (fwd[1], fwd[2], fwd[3], fwd[4], fwd[5],)
-        mc.forward(False, fwd[1], fwd[2], fwd[3], fwd[4], fwd[5])
+        mc.close_forward(fwd[1], fwd[2], fwd[3], fwd[4], fwd[5])
 
     def mux_new_forward(self, w, mc):
         SshMuxForwardingDialog(mc)
@@ -524,7 +524,7 @@ class SshMuxForwardingDialog(object):
         else:
             fwd_descr = '-D %s:%u' % (ba, lp,)
 
-        res, remote_port = self.mc.forward(True, fwd_type, ba, lp, ch, cp)
+        res, remote_port = self.mc.open_forward(fwd_type, ba, lp, ch, cp)
         if res and fwd_type == SshMuxClient.MUX_FWD_REMOTE and lp == 0:
             message = gtk.MessageDialog(
                     parent=None,
