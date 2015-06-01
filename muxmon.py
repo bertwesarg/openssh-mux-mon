@@ -108,7 +108,7 @@ class SshMuxIndicator(
         except:
             s = None
 
-        # there are not the same, clenup previous root, if any
+        # there are not the same, cleanup previous root, if any
         if self.root:
             # clear previous known mux
             for mc in self.known.itervalues():
@@ -133,21 +133,23 @@ class SshMuxIndicator(
             full = os.path.join(self.root, path)
             try:
                 sb = os.stat(full)
+
+                if not stat.S_ISSOCK(sb.st_mode):
+                    continue
+
+                mc = SshMuxEntry(full)
+                res, exts = mc.connect()
+                if res:
+                    res, name = mc.info('%r@%h:%p')
+                if res:
+                    if name[-3:] == ':22':
+                        name = name[:-3]
+                    mc.name = name
+                    self.known[full] = mc
+                    #print >>sys.stderr, 'Already existing mux: %s' % (name,)
+                self.add_to_menu(mc)
             except:
                 continue
-
-            if not stat.S_ISSOCK(sb.st_mode):
-                continue
-
-            mc = SshMuxEntry(full)
-            res, exts = mc.connect()
-            if res:
-                res, name = mc.info('%r@%h:%p')
-            if res:
-                mc.name = name
-                self.known[full] = mc
-                #print >>sys.stderr, 'Already existing mux: %s' % (name,)
-            self.add_to_menu(mc)
 
     def add_to_menu(self, mc):
         self.close_all_item.set_sensitive(True)
