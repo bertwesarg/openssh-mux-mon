@@ -124,18 +124,6 @@ if __name__ == '__main__':
             print 'Allocated port for dynamic forwarding to %s:%u: %u' % (connect_host, connect_port, val)
         print 'Request succeeded.'
 
-    elif cmd == 'cancel-by-id':
-        if len(sys.argv) != 4:
-            print >>sys.stderr, 'Invalid number of arguments'
-            sys.exit(1)
-
-        id = int(sys.argv[3])
-        res, val = muxclient.cancel_by_id(id)
-        if not res:
-            print >>sys.stderr, val
-            sys.exit(1)
-        print 'Request succeeded.'
-
     elif cmd == 'forwards':
         res, val = muxclient.forwards()
         if not res:

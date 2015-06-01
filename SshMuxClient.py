@@ -220,35 +220,6 @@ class SshMuxClient(object):
 
         return (True, None)
 
-    def cancel_by_id(self, id):
-        m = Buffer()
-        m.put_int(MUX_C_CLOSE_FWD)
-        rid = self.rid
-        self.rid += 1
-        m.put_int(rid)
-        m.put_int(id)
-
-        if self._write_packet(m) is not None:
-            return (False, 'Can\'t send CLOSE-FORWARD request')
-
-        m = self._read_packet()
-
-        rep_msg = m.get_int()
-
-        rep_rid = m.get_int()
-        if rep_rid != rid:
-            return (False, 'Got unexpected request id %u, expected %u' % (rep_rid, rid))
-
-        if rep_msg != MUX_S_OK:
-            rep_reason = m.get_str()
-            if rep_msg == MUX_S_FAILURE:
-                return (False, 'Failure in CLOSE-FORWARD request: %s' % (rep_reason,))
-            elif rep_msg == MUX_S_PERMISSION_DENIED:
-                return (False, 'Permission denied for CANCEL request: %s' % (rep_reason,))
-            return (False, 'Unexpected server reply, got %u' % (rep_msg,))
-
-        return (True, None)
-
     def forwards(self):
         m = Buffer()
         m.put_int(MUX_C_LIST_FWDS)
