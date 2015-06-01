@@ -318,7 +318,7 @@ class SshMuxIndicator(
             self.close_all_item.set_sensitive(False)
         n = pynotify.Notification(mc.name, 'MUX Closed', self.icon_name)
         n.set_urgency(pynotify.URGENCY_CRITICAL)
-        n.set_timeout(2)
+        n.set_timeout(5000)
         n.show()
 
     def process_inotify_event(self, event):
@@ -344,7 +344,7 @@ class SshMuxIndicator(
             self.known[path] = mc
             n = pynotify.Notification(name, 'MUX Established', self.icon_name)
             n.set_urgency(pynotify.URGENCY_LOW)
-            n.set_timeout(1)
+            n.set_timeout(2500)
             n.show()
             self.add_to_menu(mc)
 
