@@ -71,7 +71,8 @@ class SshMuxIndicator(
         menu.append(item)
         item.show()
 
-        self.close_all_item = gtk.MenuItem('Close All')
+        self.close_all_item = gtk.ImageMenuItem(gtk.STOCK_DISCONNECT)
+        self.close_all_item.set_label('Disconnect All')
         menu.append(self.close_all_item)
         self.close_all_item.connect('activate', self.close_all_activate)
         self.close_all_item.show()
@@ -81,9 +82,14 @@ class SshMuxIndicator(
         menu.append(item)
         item.show()
 
-        item = gtk.MenuItem('Preferences...')
+        item = gtk.ImageMenuItem(gtk.STOCK_PREFERENCES)
+        item.set_label('Preferences...')
         menu.append(item)
         item.connect('activate', self.preferences_activate)
+        item.show()
+
+        item = gtk.SeparatorMenuItem()
+        menu.append(item)
         item.show()
 
         item = gtk.ImageMenuItem(gtk.STOCK_QUIT)
@@ -156,7 +162,12 @@ class SshMuxIndicator(
         self.close_all_item.set_sensitive(True)
 
         menu = self.get_menu()
-        mc.item = gtk.MenuItem(mc.name)
+
+        mc.item = gtk.ImageMenuItem()
+        mc.item.set_label(mc.name)
+        image = gtk.image_new_from_icon_name('network-server', gtk.ICON_SIZE_MENU)
+        mc.item.set_image(image)
+        mc.item.set_always_show_image(True)
         menu.insert(mc.item, len(menu.get_children()) - self.static_menu_entry_len)
         mc.item.connect('activate', self.mux_activate, mc)
         mc.item.show()
@@ -168,7 +179,8 @@ class SshMuxIndicator(
         item.set_sensitive(False)
         item.show()
 
-        item = gtk.MenuItem('New...')
+        item = gtk.ImageMenuItem(gtk.STOCK_ADD)
+        item.set_label('New...')
         mc.sub.append(item)
         #item.set_sensitive(False)
         item.connect('activate', self.mux_new_forward, mc)
@@ -187,12 +199,12 @@ class SshMuxIndicator(
         mc.sub.append(item)
         item.show()
 
-        item = gtk.MenuItem('Stop')
+        item = gtk.ImageMenuItem(gtk.STOCK_STOP)
         mc.sub.append(item)
         item.connect('activate', self.mux_stop_activate, mc)
         item.show()
 
-        item = gtk.MenuItem('Close')
+        item = gtk.ImageMenuItem(gtk.STOCK_DISCONNECT)
         mc.sub.append(item)
         item.connect('activate', self.mux_close_activate, mc)
         item.show()
@@ -241,15 +253,37 @@ class SshMuxIndicator(
                 label = '%s:%u <- %s%u' % (ch, cp, lh, lp,)
             if ftype == 'dynamic':
                 label = '%s%u -> *:*' % (lh, lp,)
-            item = gtk.MenuItem(label)
+            item = gtk.ImageMenuItem(gtk.STOCK_CANCEL)
+            item.set_label(label)
             mc.sub.insert(item, 1 + mc.n_fwds)
             mc.n_fwds += 1
             item.connect('activate', self.mux_close_forward, mc, fwd)
             item.show()
 
         for s in sessions:
-            sid, stype, rid, cid, name, rname = s
-            item = gtk.MenuItem('%s' % (rname,))
+            sid, stype, rid, cid, tname, rname = s
+
+            session_name, session_action = rname.split(': ', 2)
+            try:
+                session_name, session_args = session_name.split('(', 2)
+                session_args = session_args[:-1]
+            except:
+                session_args = None
+
+            item = gtk.ImageMenuItem()
+            item.set_label('%s' % (rname,))
+            if tname == 'stdio-forward':
+                image = gtk.image_new_from_icon_name('preferences-system-network-proxy-symbolic', gtk.ICON_SIZE_MENU)
+                item.set_image(image)
+            if session_name == 'subsystem-session' and session_action == 'sftp':
+                image = gtk.image_new_from_icon_name('folder-remote-ftp', gtk.ICON_SIZE_MENU)
+                item.set_image(image)
+            if session_name == 'shell-session':
+                image = gtk.image_new_from_icon_name('terminal', gtk.ICON_SIZE_MENU)
+                item.set_image(image)
+            if session_name == 'exec-session':
+                image = gtk.image_new_from_stock(gtk.STOCK_EXECUTE, gtk.ICON_SIZE_MENU)
+                item.set_image(image)
             mc.sub.insert(item, 4 + mc.n_fwds + mc.n_sessions)
             mc.n_sessions += 1
             item.show()
