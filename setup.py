@@ -13,6 +13,6 @@ setup(
         'pygtk>=2.24',
         'appindicator>=12.10.1',
         'pynotify>=0.1.1',
-        'pyinotify>=0.9.5'
+        'pyinotify>=0.9.5',
     ]
 )
