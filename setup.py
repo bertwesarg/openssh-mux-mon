@@ -5,7 +5,7 @@ setup(
     version = '1.0',
     author = 'Bert Wesarg',
     author_email = 'bertwesarg@users.noreply.github.com',
-    description = 'A AppIndicator to monitor OpenSSH connections',
+    description = 'AppIndicator to monitor OpenSSH connections',
     license = '3-clause BSD',
     url = 'https://github.com/bertwesarg/openssh-mux-mon',
     scripts = ['muxmon.py', 'pysshmux.py'],
