@@ -86,7 +86,7 @@ class SshMuxIndicator(
         item.connect('activate', self.preferences_activate)
         item.show()
 
-        item = gtk.MenuItem('Quit')
+        item = gtk.ImageMenuItem(gtk.STOCK_QUIT)
         menu.append(item)
         item.connect('activate', self.quit_activate)
         item.show()
