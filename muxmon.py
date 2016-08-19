@@ -91,6 +91,7 @@ class SshMuxIndicator(
         item.connect('activate', self.quit_activate)
         item.show()
 
+        self.static_menu_entry_len = len(menu.get_children())
         self.set_menu(menu)
 
         self.reread_path()
@@ -156,7 +157,7 @@ class SshMuxIndicator(
 
         menu = self.get_menu()
         mc.item = gtk.MenuItem(mc.name)
-        menu.insert(mc.item, len(menu.get_children()) - 5)
+        menu.insert(mc.item, len(menu.get_children()) - self.static_menu_entry_len)
         mc.item.connect('activate', self.mux_activate, mc)
         mc.item.show()
 
