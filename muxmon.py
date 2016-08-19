@@ -136,6 +136,7 @@ class SshMuxIndicator(
         self.root = s
         self._wd = self._wm.add_watch(self.root, pyinotify.IN_CREATE | pyinotify.IN_DELETE)
 
+        muxs = []
         for path in os.listdir(self.root):
             full = os.path.join(self.root, path)
             try:
@@ -143,17 +144,28 @@ class SshMuxIndicator(
 
                 if not stat.S_ISSOCK(sb.st_mode):
                     continue
+                muxs += [(full, sb.st_mtime)]
 
+            except:
+                continue
+
+        muxs.sort(key=lambda x: x[1])
+        for full, mtime in muxs:
+            try:
                 mc = SshMuxEntry(full)
                 res, exts = mc.connect()
-                if res:
-                    res, name = mc.info('%r@%h:%p')
-                if res:
-                    if name[-3:] == ':22':
-                        name = name[:-3]
-                    mc.name = name
-                    self.known[full] = mc
-                    #print >>sys.stderr, 'Already existing mux: %s' % (name,)
+                if not res:
+                    continue
+
+                res, name = mc.info('%r@%h:%p')
+                if not res:
+                    continue
+
+                if name[-3:] == ':22':
+                    name = name[:-3]
+                mc.name = name
+                self.known[full] = mc
+                #print >>sys.stderr, 'Already existing mux: %s' % (name,)
                 self.add_to_menu(mc)
             except:
                 continue
