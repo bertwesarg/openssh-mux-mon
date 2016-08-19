@@ -4,6 +4,7 @@ import os
 import os.path
 import stat
 import sys
+import subprocess
 
 import pygtk
 pygtk.require('2.0')
@@ -18,6 +19,7 @@ import SshMuxClient
 
 GCONF_APP = '/apps/sshmuxmon'
 GCONF_APP_PATH = os.path.join(GCONF_APP, 'path')
+GCONF_APP_HOSTS = os.path.join(GCONF_APP, 'hosts')
 
 class SshMuxEntry(SshMuxClient.SshMuxClient):
     name = ''
@@ -48,7 +50,7 @@ class SshMuxIndicator(
 
         self._gcc = gconf.client_get_default()
         self._gcc.add_dir(GCONF_APP, gconf.CLIENT_PRELOAD_NONE)
-        self._gc_nid = self._gcc.notify_add(GCONF_APP_PATH, self.gconf_notify, None)
+        self._gc_nid = self._gcc.notify_add(GCONF_APP, self.gconf_notify, None)
 
         pynotify.init('SSH-MUX-Monitor')
 
@@ -77,6 +79,13 @@ class SshMuxIndicator(
         self.close_all_item.connect('activate', self.close_all_activate)
         self.close_all_item.show()
         self.close_all_item.set_sensitive(False)
+
+        self.connect_to = gtk.ImageMenuItem(gtk.STOCK_CONNECT)
+        self.connect_to.set_label('Connect to')
+        menu.append(self.connect_to)
+        self.connect_to.connect('activate', self.connect_to_activate)
+        self.connect_to.set_submenu(gtk.Menu())
+        self.connect_to.show()
 
         item = gtk.SeparatorMenuItem()
         menu.append(item)
@@ -235,6 +244,37 @@ class SshMuxIndicator(
     def close_all_activate(self, w):
         for mc in self.known.itervalues():
             mc.exit()
+
+    def connect_to_activate(self, w):
+        try:
+            hosts = self._gcc.get_list(GCONF_APP_HOSTS, gconf.VALUE_STRING)
+        except:
+           hosts = []
+
+        submenu = w.get_submenu()
+        for child in submenu.get_children():
+            submenu.remove(child)
+
+        # populate devices menu
+        for host in hosts:
+            item = gtk.ImageMenuItem()
+            item.set_label(host)
+            try:
+                image = gtk.image_new_from_icon_name('network-server', gtk.ICON_SIZE_MENU)
+                item.set_image(image)
+                item.set_always_show_image(True)
+            except:
+                pass
+
+            submenu.append(item)
+            item.connect('activate', self.connect_to_host_activate, host)
+            item.show()
+
+        w.set_submenu(submenu)
+
+    def connect_to_host_activate(self, w, host):
+        ret = subprocess.call(['ssh', '-NfT', host, '/bin/true'])
+        pass
 
     def mux_activate(self, w, mc):
         # update forwards and sessions
@@ -400,7 +440,8 @@ class SshMuxIndicator(
         return False
 
     def gconf_notify(self, client, cnxn_id, entry, arg):
-        self.reread_path()
+        if entry.key == GCONF_APP_PATH and entry.value is not None and entry.value.type == gconf.VALUE_STRING:
+            self.reread_path()
 
 class SshMuxPrefsDialog(object):
     def __init__(self, gcc):
