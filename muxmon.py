@@ -273,8 +273,7 @@ class SshMuxIndicator(
         w.set_submenu(submenu)
 
     def connect_to_host_activate(self, w, host):
-        ret = subprocess.call(['ssh', '-NfT', host, '/bin/true'])
-        pass
+        subprocess.Popen(['ssh', host, '/bin/true'], close_fds=True)
 
     def mux_activate(self, w, mc):
         # update forwards and sessions
