@@ -11,4 +11,4 @@ Dependencies
  - pynotify 0.1.1
  - pyinotify 0.9.5
 
-For best experience use OpenSSH from [bertwesarg/openssh-portable in the branch bw/master](/bertwesarg/openssh-portable/tree/bw/master)
+For best experience use OpenSSH from https://github.com/bertwesarg/openssh-portable/tree/bw/master.
