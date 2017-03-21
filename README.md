@@ -1,7 +1,8 @@
 OpenSSH Connection Monitor
 ==========================
 
-AppIndicator to monitor OpenSSH connections.
+AppIndicator to monitor, control, and configure forwardings of OpenSSH
+connections.
 
 Dependencies
 ============
