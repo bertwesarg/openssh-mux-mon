@@ -73,19 +73,19 @@ class SshMuxIndicator(
         menu.append(item)
         item.show()
 
-        self.close_all_item = gtk.ImageMenuItem(gtk.STOCK_DISCONNECT)
-        self.close_all_item.set_label('Disconnect All')
-        menu.append(self.close_all_item)
-        self.close_all_item.connect('activate', self.close_all_activate)
-        self.close_all_item.show()
-        self.close_all_item.set_sensitive(False)
-
         self.connect_to = gtk.ImageMenuItem(gtk.STOCK_CONNECT)
         self.connect_to.set_label('Connect to')
         menu.append(self.connect_to)
         self.connect_to.connect('activate', self.connect_to_activate)
         self.connect_to.set_submenu(gtk.Menu())
         self.connect_to.show()
+
+        self.close_all_item = gtk.ImageMenuItem(gtk.STOCK_DISCONNECT)
+        self.close_all_item.set_label('Disconnect All')
+        menu.append(self.close_all_item)
+        self.close_all_item.connect('activate', self.close_all_activate)
+        self.close_all_item.show()
+        self.close_all_item.set_sensitive(False)
 
         item = gtk.SeparatorMenuItem()
         menu.append(item)
@@ -167,11 +167,13 @@ class SshMuxIndicator(
                     continue
 
                 res, name = mc.info('%r@%h:%p')
-                if not res:
-                    continue
+                if res:
+                    if name[-3:] == ':22':
+                        name = name[:-3]
+                else:
+                    #print >>sys.stderr, ' could not get info from %s: %s' % (path, name,)
+                    name = os.path.basename(full)
 
-                if name[-3:] == ':22':
-                    name = name[:-3]
                 mc.name = name
                 self.known[full] = mc
                 #print >>sys.stderr, 'Already existing mux: %s' % (name,)
@@ -286,11 +288,19 @@ class SshMuxIndicator(
         mc.n_sessions = 0
         res, fwds = mc.forwards()
         if not res:
-            return
+            #print >>sys.stderr, 'cannot list forwardings: %s' % (fwds,)
+            fwds = []
 
         res, sessions = mc.sessions()
         if not res:
-            return
+            #print >>sys.stderr, 'cannot list sessions: %s' % (sessions,)
+            sessions = []
+
+        def _hp(h, p):
+            if p == SshMuxClient.MUX_FWD_PORT_STREAMLOCAL:
+                return h
+            else:
+                return '%s:%d' % (h, p,)
 
         for fwd in fwds:
             fid, ftype, lh, lp, ch, cp = fwd
@@ -299,11 +309,11 @@ class SshMuxIndicator(
             if lh == ':':
                 lh = ''
             if ftype == 'local':
-                label = '%s%u -> %s:%u' % (lh, lp, ch, cp,)
+                label = '%s -> %s' % (_hp(lh, lp), _hp(ch, cp),)
             if ftype == 'remote':
-                label = '%s:%u <- %s%u' % (ch, cp, lh, lp,)
+                label = '%s <- %s' % (_hp(ch, cp), _hp(lh, lp),)
             if ftype == 'dynamic':
-                label = '%s%u -> *:*' % (lh, lp,)
+                label = '%s -> *' % (_hp(lh if lh else 'localhost', lp),)
             item = gtk.ImageMenuItem(gtk.STOCK_CANCEL)
             item.set_label(label)
             mc.sub.insert(item, 1 + mc.n_fwds)
@@ -314,7 +324,11 @@ class SshMuxIndicator(
         for s in sessions:
             sid, stype, rid, cid, tname, rname = s
 
-            session_name, session_action = rname.split(': ', 2)
+            #print >>sys.stderr, 'session: %r' % (s,)
+            try:
+                session_name, session_action = rname.split(': ', 2)
+            except:
+                session_name, session_action = (rname, '',)
             try:
                 session_name, session_args = session_name.split('(', 2)
                 session_args = session_args[:-1]
@@ -426,6 +440,15 @@ class SshMuxIndicator(
         res, exts = mc.connect()
         if res:
             res, name = mc.info('%r@%h:%p')
+            if res:
+                if name[-3:] == ':22':
+                    name = name[:-3]
+            else:
+                #print >>sys.stderr, ' could not get info from %s: %s' % (path, name,)
+                name = os.path.basename(path)
+                res = True
+        #else:
+            #print >>sys.stderr, ' could not connect to %s: ' % (path, exts,)
         if res:
             #print >>sys.stderr, ' new %r' % (name,)
             mc.name = name
